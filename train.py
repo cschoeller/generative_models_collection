@@ -37,14 +37,14 @@ from pycandle.training.model_trainer import ModelTrainer
 
 
 class Config:
-    lr = 0.0001 #0.001
-    epochs = 300
+    lr = 0.001
+    epochs = 30
     gan_epochs = 200
     batch_size = 64
     model_samples = 50000
     device = 0 # gpu
     dataset_type = DatasetType.FACE
-    dataset_size = 100000#50000
+    dataset_size = 50000
 
 
 def load_model(model, checkpoint_path):
@@ -176,6 +176,7 @@ def main():
     # train_model(target_dataset, nsf, losses.nll, checkpoint_path / "nsf_checkpoint.pt")
     # model_samples["NSF"] = nsf.sample(Config.model_samples)
 
+    Config.epochs = 300
     diffm = DiffusionModel(dim=2, T=100, device=Config.device)
     train_model(target_dataset, diffm, diffusion_loss, checkpoint_path / "diffm_checkpoint.pt")
     model_samples["DIFF"] = diffm.sample(Config.model_samples)

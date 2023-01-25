@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 from torchvision.datasets import FakeData
@@ -20,8 +21,16 @@ def forward_diffusion(x_0, alpha_bar, timesteps):
 
 def create_alphas(T):
     """ Create alpha schedule """
-    betas = torch.linspace(0., np.pi/5., T)
-    alpha = torch.abs(torch.cos(betas)) # cosine schedule
+    #betas = torch.linspace(0., np.pi/5., T)
+    #alpha = torch.abs(torch.cos(betas)) # cosine schedule
+
+    #betas = torch.linspace(0., np.pi/6.8, T)
+    #alpha = torch.abs(torch.cos(betas)) # cosine schedule
+
+
+    beta = .3*torch.linspace(0., 0.85, T)**3
+    alpha = 1 - beta
+
     #beta = torch.linspace(10e-4, 0.02, T) # Ho et al. 2020
     #beta = torch.linspace(0., 0.2, T) # Ho et al. 2020
     #alpha = 1. - beta
@@ -49,6 +58,12 @@ class DiffusionModel(nn.Module):
         self.alpha = create_alphas(T).to(device)
         self.alpha_bar = torch.cumprod(self.alpha, dim=0).to(device)
 
+        # plt.plot(self.alpha.cpu(), color='green')
+        # plt.plot(self.alpha_bar.cpu(), color='blue')
+        # plt.plot(1. - self.alpha_bar.cpu(), color='orange')
+        # plt.show()
+        # exit()
+
         # TODO: verify correctness
         self.sigma = (
             (1 - self.alpha)
@@ -58,23 +73,23 @@ class DiffusionModel(nn.Module):
 
         time_dim = 8
         self.time_net = nn.Sequential(
-            nn.Linear(1, 16),
-            nn.GELU(),
+            nn.Linear(self.T, 16),
+            nn.ELU(),
             nn.Linear(16, 8)
         )
         
         self.noise_net =  nn.Sequential(
-            nn.Linear(dim + time_dim, 16),
-            nn.GELU(),
-            nn.Linear(16, 32),
-            nn.GELU(),
-            nn.Linear(32, 64),
-            nn.GELU(),
-            nn.Linear(64, 128),
-            nn.GELU(),
-            nn.Linear(128, 256),
-            nn.GELU(),
-            nn.Linear(256, dim)
+            nn.Linear(dim + time_dim, 50),
+            nn.ELU(),
+            nn.Linear(50, 100),
+            nn.ELU(),
+            nn.Linear(100, 200),
+            nn.ELU(),
+            nn.Linear(200, 200),
+            nn.ELU(),
+            nn.Linear(200, 200),
+            nn.ELU(),
+            nn.Linear(200, dim)
         )
 
         self.device = device
@@ -90,10 +105,16 @@ class DiffusionModel(nn.Module):
 
     def forward(self, x_t, timesteps):
         """ Predict noise """
-        if len(timesteps.shape) == 1:
-            timesteps = timesteps.unsqueeze(1)
+        #if len(timesteps.shape) == 1:
+        #    timesteps = timesteps.unsqueeze(1)
 
-        t_emb = self.time_net(timesteps.float())
+        t_emb = F.one_hot(timesteps, self.T).float()
+        t_emb = self.time_net(t_emb)
+        # print(t_emb.shape)
+        #print(one_hot.shape)
+        # exit()
+
+        #t_emb = self.time_net(timesteps.float())
         x_t_time = torch.cat([x_t, t_emb], dim=1) # cat time embedding
         return self.noise_net(x_t_time)
 
@@ -118,7 +139,7 @@ class DiffusionModel(nn.Module):
 
 # Last major change:
 # Sampling from denoising distribution. Seems it is VERY important, otherwise it seems
-# net network just undoes all points noise and deterministically pushes them forward
+# net network just undoes all points' noise and deterministically pushes them forward
 # from the (0,0) center on the same deterministic route! This was explained badly in the
 # survey paper so far. Then I also had a left over bug where I basically kept the t fixed
 # in the denoising.
