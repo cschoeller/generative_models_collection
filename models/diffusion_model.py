@@ -13,7 +13,7 @@ torch.set_printoptions(sci_mode=False)
 
 def forward_diffusion(x_0, alpha_bar, timesteps):
     """ Models function q(x_t | x_0) """
-    eps_0 = torch.randn_like(x_0).to(x_0) # sample noise
+    eps_0 = torch.randn_like(x_0).to(x_0.device) # sample noise
     alpha_t_bar = alpha_bar[timesteps, None]
     x_t = torch.sqrt(alpha_t_bar) * x_0 + torch.sqrt(1 - alpha_t_bar) * eps_0
     return eps_0, x_t
@@ -30,7 +30,7 @@ def create_alphas(T):
 def diffusion_loss(x, model):
     """ MSE loss between sampled noise and predicted noise """
     T, alpha_bar = model.T, model.alpha_bar
-    timestep = torch.randint(T, size=(x.shape[0],)).to(x) # sample timesteps
+    timestep = torch.randint(T, size=(x.shape[0],)).to(x.device) # sample timesteps
     
     # predict noise and compute loss
     eps_0, x_t = forward_diffusion(x, alpha_bar, timestep) # generate noisy inputs
@@ -104,7 +104,7 @@ class DiffusionModel(nn.Module):
         """
         timesteps = torch.full((len(x_t),), t).to(self.device)
         eps_pred = self(x_t, timesteps)
-        eps_pred *= (1 - self.alpha[t]) / ((1 - self.alpha_bar[t])**0.5 + 1e-16)
+        eps_pred *= (1 - self.alpha[t]) / ((1 - self.alpha_bar[t])**0.5 + 1e-31)
         mean =  1 / (self.alpha[t] ** 0.5) * (x_t - eps_pred)
         return mean + self.sigma[t] * torch.randn_like(x_t)
         
