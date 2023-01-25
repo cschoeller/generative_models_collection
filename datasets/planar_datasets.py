@@ -45,7 +45,7 @@ class _PlanarDataset(Dataset):
         mean = torch.mean(self.data, dim=0)
         centered_data = self.data - mean
         x_max = centered_data[:,0].max()
-        self.data = (centered_data / x_max) * 3.
+        self.data = (centered_data / x_max) * 1. #3.
 
     @abstractmethod
     def _create_data(self):
