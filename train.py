@@ -61,9 +61,9 @@ def store_model(model, checkpoint_path):
 
 def train_model(dataset, model, loss, checkpoint_path):
     # load model from drive if it was trained earlier
-    # if os.path.isfile(checkpoint_path):
-    #    load_model(model, checkpoint_path)
-    #    return
+    if os.path.isfile(checkpoint_path):
+       load_model(model, checkpoint_path)
+       return
     #train model
     print(f"Training model {model.__class__.__name__}...")
     optimizer = torch.optim.Adam(model.parameters(), lr=Config.lr)
@@ -71,7 +71,7 @@ def train_model(dataset, model, loss, checkpoint_path):
     train_loader = Data.DataLoader(dataset=dataset, batch_size=Config.batch_size, shuffle=True, num_workers=4)
     model_trainer = ModelTrainer(model, optimizer, loss, Config.epochs, train_loader, custom_model_eval=True, device=Config.device, scheduler=scheduler)
     model_trainer.start_training()
-    # store_model(model, checkpoint_path)
+    store_model(model, checkpoint_path)
 
 def train_gan(dataset, gen, disc, checkpoint_path):
     # load model from disc
@@ -140,7 +140,6 @@ def plot_all_samples(dataset, model_samples):
     #plt.show()
     #plt.close()
 
-
 def main():
     plot_training_datasets()
 
@@ -151,30 +150,30 @@ def main():
         os.makedirs(checkpoint_path)
     model_samples = {}
 
-    # vae = VariationalAutoencoder(nin=2, hiddens=[8, 16, 32, 64], device=Config.device)
-    # train_model(target_dataset, vae, losses.vae_loss, checkpoint_path / "vae_checkpoint.pt")
-    # model_samples["VAE"] = vae.sample(Config.model_samples)
+    vae = VariationalAutoencoder(nin=2, hiddens=[8, 16, 32, 64], device=Config.device)
+    train_model(target_dataset, vae, losses.vae_loss, checkpoint_path / "vae_checkpoint.pt")
+    model_samples["VAE"] = vae.sample(Config.model_samples)
 
-    # gan_gen = GANGenerator(noise_size=8, nh=[24, 24, 24], nout=2, device=0)
-    # gan_disc = GANDiscriminator(nin=2, nh=[24, 24, 24], device=0)
-    # train_gan(target_dataset, gan_gen, gan_disc, checkpoint_path / "gan_checkpoint.pt")
-    # model_samples["GAN"] = gan_gen.sample(Config.model_samples)
+    gan_gen = GANGenerator(noise_size=8, nh=[24, 24, 24], nout=2, device=0)
+    gan_disc = GANDiscriminator(nin=2, nh=[24, 24, 24], device=0)
+    train_gan(target_dataset, gan_gen, gan_disc, checkpoint_path / "gan_checkpoint.pt")
+    model_samples["GAN"] = gan_gen.sample(Config.model_samples)
 
-    # made = GaussianMADE(nin=2, hidden_sizes=[16, 32, 16])
-    # train_model(target_dataset, made, losses.made_loss, checkpoint_path / "made_checkpoint.pt")
-    # model_samples["MADE"] = made.sample(Config.model_samples)
+    made = GaussianMADE(nin=2, hidden_sizes=[16, 32, 16])
+    train_model(target_dataset, made, losses.made_loss, checkpoint_path / "made_checkpoint.pt")
+    model_samples["MADE"] = made.sample(Config.model_samples)
 
-    # maf = MAF(nin=2, num_mades=5, nh=32, device=Config.device, batchnorm=False)
-    # train_model(target_dataset, maf, losses.maf_loss, checkpoint_path / "maf_checkpoint.pt")
-    # model_samples["MAF"] = maf.sample(Config.model_samples)
+    maf = MAF(nin=2, num_mades=5, nh=32, device=Config.device, batchnorm=False)
+    train_model(target_dataset, maf, losses.maf_loss, checkpoint_path / "maf_checkpoint.pt")
+    model_samples["MAF"] = maf.sample(Config.model_samples)
 
-    # iaf = IAF(nin=2, num_mades=5, nh=32, device=Config.device)
-    # train_model(target_dataset, iaf, losses.iaf_loss, checkpoint_path / "iaf_checkpoint.pt")
-    # model_samples["IAF"] = iaf.sample(Config.model_samples)
+    iaf = IAF(nin=2, num_mades=5, nh=32, device=Config.device)
+    train_model(target_dataset, iaf, losses.iaf_loss, checkpoint_path / "iaf_checkpoint.pt")
+    model_samples["IAF"] = iaf.sample(Config.model_samples)
 
-    # nsf = NeuralSplineFlow(nin=2, n_layers=8, K=10, B=6, hidden_dim=8, device=Config.device)
-    # train_model(target_dataset, nsf, losses.nll, checkpoint_path / "nsf_checkpoint.pt")
-    # model_samples["NSF"] = nsf.sample(Config.model_samples)
+    nsf = NeuralSplineFlow(nin=2, n_layers=8, K=10, B=6, hidden_dim=8, device=Config.device)
+    train_model(target_dataset, nsf, losses.nll, checkpoint_path / "nsf_checkpoint.pt")
+    model_samples["NSF"] = nsf.sample(Config.model_samples)
 
     Config.epochs = 300
     diffm = DiffusionModel(dim=2, T=100, device=Config.device)
@@ -182,40 +181,6 @@ def main():
     model_samples["DIFF"] = diffm.sample(Config.model_samples)
 
     plot_all_samples(target_dataset, model_samples)
-
-
-    # uniform
-    # unif = torch.rand((50000,2))
-    # sns.scatterplot(x=unif[:,0], y=unif[:,1], color="black", s=0.5)
-    # plt.tight_layout()
-    # plt.axis('equal')
-    # plt.savefig(f"test/uniform.png")
-    # plt.close()
-
-    #TODO Remove, testing distribution diffusion
-    # x = torch.tensor(target_dataset.data.numpy())
-    # T = 20
-    # alphas = create_alphas(T)
-
-    # white = torch.randn_like(x)
-    # sns.scatterplot(x=white[:,0], y=white[:,1], color="black", s=0.5)
-    # plt.tight_layout()
-    # plt.axis('equal')
-    # plt.savefig(f"test/white.png")
-    # plt.close()
-    
-    # timestep = torch.tensor([0]).repeat(Config.dataset_size).unsqueeze(1)
-    # for i in range(T):
-    #     e = torch.randn_like(x)
-    #     x_t = forward_diffusion(x, e, alphas, timestep)
-    #     timestep += 1
-
-    #     sns.scatterplot(x=x_t[:,0], y=x_t[:,1], color="black", s=0.5)
-    #     plt.tight_layout()
-    #     plt.axis('equal')
-    #     plt.savefig(f"test/{i}.png")
-    #     plt.close()
-
 
 
 if __name__ == "__main__":

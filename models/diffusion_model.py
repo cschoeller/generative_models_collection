@@ -1,3 +1,11 @@
+"""
+Implements a denoising diffusion model based on the papers:
+
+"Denoising Diffusion Probabilistic Models", Ho et al., Dec 2020
+"Understanding Diffusion Models: A Unified Perspective", Calvin Luo, Aug 2022
+"""
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,31 +17,19 @@ from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
-torch.set_printoptions(sci_mode=False)
-
 
 def forward_diffusion(x_0, alpha_bar, timesteps):
     """ Models function q(x_t | x_0) """
-    eps_0 = torch.randn_like(x_0).to(x_0.device) # sample noise
+    x_0 /= 3. # normalize in range [-1,1]
+    eps_0 = torch.randn_like(x_0).to(x_0.device)
     alpha_t_bar = alpha_bar[timesteps, None]
     x_t = torch.sqrt(alpha_t_bar) * x_0 + torch.sqrt(1 - alpha_t_bar) * eps_0
     return eps_0, x_t
 
 def create_alphas(T):
     """ Create alpha schedule """
-    #betas = torch.linspace(0., np.pi/5., T)
-    #alpha = torch.abs(torch.cos(betas)) # cosine schedule
-
-    #betas = torch.linspace(0., np.pi/6.8, T)
-    #alpha = torch.abs(torch.cos(betas)) # cosine schedule
-
-
-    beta = .3*torch.linspace(0., 0.85, T)**3
+    beta = .3 * torch.linspace(0., 0.85, T)**3 # polynomial
     alpha = 1 - beta
-
-    #beta = torch.linspace(10e-4, 0.02, T) # Ho et al. 2020
-    #beta = torch.linspace(0., 0.2, T) # Ho et al. 2020
-    #alpha = 1. - beta
     return alpha
 
 def diffusion_loss(x, model):
@@ -49,27 +45,16 @@ def diffusion_loss(x, model):
 
 class DiffusionModel(nn.Module):
 
-    def __init__(self, dim, T, data_minmax=(-1., 1.), device=0):
+    def __init__(self, dim, T, device=0):
         super().__init__()
         self.dim = dim
         self.T = T
-        # self.vals_min, self.vals_max = data_minmax
-        # self.val_mag = self.vals_max - self.vals_min
         self.alpha = create_alphas(T).to(device)
         self.alpha_bar = torch.cumprod(self.alpha, dim=0).to(device)
 
-        # plt.plot(self.alpha.cpu(), color='green')
-        # plt.plot(self.alpha_bar.cpu(), color='blue')
-        # plt.plot(1. - self.alpha_bar.cpu(), color='orange')
-        # plt.show()
-        # exit()
-
-        # TODO: verify correctness
-        self.sigma = (
-            (1 - self.alpha)
-            * (1 - torch.roll(self.alpha_bar, 1)) / (1 - self.alpha_bar)
-        ) ** 0.5
-        self.sigma[0] = 0. # nan due to denominator‚
+        self.sigma = ((1 - self.alpha) * (1 - torch.roll(self.alpha_bar, 1))
+                     / (1 - self.alpha_bar)) ** 0.5
+        self.sigma[0] = 0. # nan due to denominator
 
         time_dim = 8
         self.time_net = nn.Sequential(
@@ -95,33 +80,17 @@ class DiffusionModel(nn.Module):
         self.device = device
         self.to(device)
 
-    # def normalize(self, x):
-    #     """ Squeeze data in range [-1, 1] """
-    #     return (x + self.vals_min) * (2/self.val_mag) - 1.
-
-    # def denormalize(self, x):‚
-    #     """ Revert data normalization """
-    #     return (x + 1.) / (2/self.val_mag) - self.vals_min
-
     def forward(self, x_t, timesteps):
         """ Predict noise """
-        #if len(timesteps.shape) == 1:
-        #    timesteps = timesteps.unsqueeze(1)
-
         t_emb = F.one_hot(timesteps, self.T).float()
         t_emb = self.time_net(t_emb)
-        # print(t_emb.shape)
-        #print(one_hot.shape)
-        # exit()
-
-        #t_emb = self.time_net(timesteps.float())
-        x_t_time = torch.cat([x_t, t_emb], dim=1) # cat time embedding
+        x_t_time = torch.cat([x_t, t_emb], dim=1)
         return self.noise_net(x_t_time)
 
     def _denoising_step(self, x_t, t):
         """
-        Predict mean of q(x_t-1 | x_t, x_o) with p(x_t-1 | x_t, t). We don't need
-        the variance as we don't want to sample from this distribution.
+        Predict approximation of q(x_t-1 | x_t, x_o) with p(x_t-1 | x_t, t) and sample
+        from it.
         """
         timesteps = torch.full((len(x_t),), t).to(self.device)
         eps_pred = self(x_t, timesteps)
@@ -134,36 +103,4 @@ class DiffusionModel(nn.Module):
             x_t = torch.randn((n, self.dim)).to(self.device)
             for t in range(self.T-1, -1, -1):
                 x_t = self._denoising_step(x_t, t)
-            return x_t
-            
-
-# Last major change:
-# Sampling from denoising distribution. Seems it is VERY important, otherwise it seems
-# net network just undoes all points' noise and deterministically pushes them forward
-# from the (0,0) center on the same deterministic route! This was explained badly in the
-# survey paper so far. Then I also had a left over bug where I basically kept the t fixed
-# in the denoising.
-# Probably also model too small.
-
-
-# # TODO use torch fill, cumprod, maybe roll
-
-# # torch.set_printoptions(sci_mode=False)
-
-# # T = 10
-# # alphas = create_alphas(T)
-# # print(alphas)
-
-# # img = Image.open("../datasets/jobs.jpg")
-# # img.thumbnail((256, 256))
-
-# # convert_tensor = transforms.ToTensor()
-# # img = convert_tensor(img)
-
-# # out_folder = "noise_test/"
-# # for t in range(T):
-# #     e = torch.randn_like(img).to(img.device)
-# #     img_t = forward_diffusion(img.unsqueeze(0), e.unsqueeze(0), alphas, torch.tensor([t]))
-# #     img_t = img_t.squeeze()
-# #     plt.imshow(img_t.permute(1,2,0))
-# #     plt.savefig(out_folder + f"{t}_.jpg")
+            return x_t * 3. # reverse normalization
