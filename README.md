@@ -8,5 +8,6 @@ implementations of the following models (PyTorch 1.13):
 - Inverse Autoregressive Flows, Kingma et al., 2016
 - Masked Autoregressive Flows, Papamakarios et al., 2017
 - Neural Spline Flows, Durkan et al., 2019
+- Denoising Diffusion Probabilistic Models, Ho et al., 2020
 
 <img src="distributions_face.png" height="300">
